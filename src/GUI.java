@@ -16,16 +16,16 @@ public class GUI implements ActionListener{
 		options.setLayout(new GridLayout(5, 2));
 		options.add(new JLabel("Options:"));
 		options.add(new JLabel(""));
-		options.add(new JLabel("Input File Name:"));
+		options.add(new JLabel("Input File Name: (w/o .csv)"));
 		fname = new JTextField(20);
 		options.add(fname);
-		options.add(new JLabel("Point tolerance:"));
+		options.add(new JLabel("Point tolerance: (in.)"));
 		pT = new JTextField(20);
 		options.add(pT);
-		options.add(new JLabel("Max total deflection:"));
+		options.add(new JLabel("Max total deflection: (% grade)"));
 		mTD = new JTextField(20);
 		options.add(mTD);
-		options.add(new JLabel("Max point deflection:"));
+		options.add(new JLabel("Max point deflection: (% grade)"));
 		mPT = new JTextField(20);
 		options.add(mPT);
 		
@@ -53,12 +53,12 @@ public class GUI implements ActionListener{
 	@Override
 	public void actionPerformed(ActionEvent e) {
 		try {
-			//PB7_TOPO, 1, 0.03, 1
-			Main m = new Main(fname.getText(), Double.parseDouble(pT.getText()), Double.parseDouble(mTD.getText()), Double.parseDouble(mPT.getText()));
+			//PB7_TOPO, 1, 3, 1
+			Main m = new Main(fname.getText(), Double.parseDouble(pT.getText()), Double.parseDouble(mTD.getText())/100, Double.parseDouble(mPT.getText()));
 			m.run();
 			errors.setText("Computed successfully");
 		}catch (Exception exc) {
-			errors.setText("Something was inputted incorrectly");
+			errors.setText(exc.getMessage());
 		}
 		
 	}

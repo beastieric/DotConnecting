@@ -35,6 +35,7 @@ public class Main {
 					for(Row point : solve(points)) {
 						out.println(point);
 					}
+					
 					points = new ArrayList<Row>();
 				}
 			}
@@ -70,18 +71,52 @@ public class Main {
 			}
 			motorI++;
 		}
-		double[] regression = regression(points, points.get(motorI).northing, points.get(motorI).elevation);
 		List<Row> ret = new ArrayList<Row>();
-		for(int i = 0; i < points.size(); i++) {
-			double ele = regression[0]*points.get(i).northing + regression[1];
-			ele = Math.min(ele, points.get(i).elevation+error);
-			ele = Math.max(ele, points.get(i).elevation-error);
-			ret.add(new Row(points.get(i).point, points.get(i).northing, points.get(i).easting, ele, points.get(i).description));
+		for(int j = 1; j <= 10; j++) {
+			double[] regression = regression(points, points.get(motorI).northing, points.get(motorI).elevation, maxSlope*0.1*j);
+			ret = new ArrayList<Row>();
+			for(int i = 0; i < points.size(); i++) {
+				double ele = regression[0]*points.get(i).northing + regression[1];
+				ele = Math.min(ele, points.get(i).elevation+error);
+				ele = Math.max(ele, points.get(i).elevation-error);
+				ret.add(new Row(points.get(i).point, points.get(i).northing, points.get(i).easting, ele, points.get(i).description));
+			}
+			
+			if(!fixDeflections(ret, points, motorI, 0.011, 0.01)) {
+				if(!fixDeflections(ret, points, motorI, 0.009, 0.011)) {
+					if(!fixDeflections(ret, points, motorI, 0.01, 0.01)) {
+						if(!fixDeflections(ret, points, motorI, 0.01, 0.011)) {
+							if(!fixDeflections(ret, points, motorI, 0.01, 0.009)) {
+								if(j == 10) {
+									System.out.println("failed with " + points.get(0).point);
+								}
+								continue;
+							}
+						}
+					}
+				}
+			}
+			break;
 		}
 		
-		for(int iter = 0; iter < 999; iter++) {
+		return ret;
+	}
+	
+	public boolean fixDeflections(List<Row> ret, List<Row> points, int motorI, double mid, double sides) {
+		for(int iter = 0; iter < 10000; iter++) {
 			double maxDeflection = 0;
 			int maxDefI = -1;
+			//change northing based on easting
+			for(int i = motorI-1; i >= 0; i--) {
+				double s2 = (points.get(i+1).elevation-points.get(i).elevation)*(points.get(i+1).elevation-points.get(i).elevation)
+						+ (points.get(i+1).northing-points.get(i).northing)*(points.get(i+1).northing-points.get(i).northing);
+				ret.get(i).northing = ret.get(i+1).northing - Math.sqrt(s2-(ret.get(i).elevation-points.get(i).elevation)*(ret.get(i).elevation-points.get(i).elevation));
+			}
+			for(int i = motorI+1; i < ret.size(); i++) {
+				double s2 = (points.get(i-1).elevation-points.get(i).elevation)*(points.get(i-1).elevation-points.get(i).elevation)
+						+ (points.get(i-1).northing-points.get(i).northing)*(points.get(i-1).northing-points.get(i).northing);
+				ret.get(i).northing = ret.get(i-1).northing + Math.sqrt(s2-(ret.get(i).elevation-points.get(i).elevation)*(ret.get(i).elevation-points.get(i).elevation));
+			}
 			for(int i = 1; i < ret.size()-1; i++) {
 				double deflection = slope(ret.get(i-1), ret.get(i))-slope(ret.get(i), ret.get(i+1));
 				if(Math.abs(deflection) > Math.abs(maxDeflection) && Math.abs(deflection) > maxD) {
@@ -90,35 +125,34 @@ public class Main {
 				}
 			}
 			if(maxDefI == -1) {				
-				return ret;
+				return true;
 			}
 			//facing down
 			if(maxDeflection > 0) {
-				ret.get(maxDefI).elevation-=0.11;
+				ret.get(maxDefI).elevation-=mid;
 				ret.get(maxDefI).elevation = Math.max(ret.get(maxDefI).elevation, points.get(maxDefI).elevation-error);
-				ret.get(maxDefI+1).elevation+=0.1;
+				ret.get(maxDefI+1).elevation+=sides;
 				ret.get(maxDefI+1).elevation = Math.min(ret.get(maxDefI+1).elevation, points.get(maxDefI+1).elevation+error);
-				ret.get(maxDefI-1).elevation+=0.1;
+				ret.get(maxDefI-1).elevation+=sides;
 				ret.get(maxDefI-1).elevation = Math.min(ret.get(maxDefI-1).elevation, points.get(maxDefI-1).elevation+error);
 			}else {
-				ret.get(maxDefI).elevation+=0.11;
+				ret.get(maxDefI).elevation+=mid;
 				ret.get(maxDefI).elevation = Math.min(ret.get(maxDefI).elevation, points.get(maxDefI).elevation+error);
-				ret.get(maxDefI+1).elevation-=0.1;
+				ret.get(maxDefI+1).elevation-=sides;
 				ret.get(maxDefI+1).elevation = Math.max(ret.get(maxDefI+1).elevation, points.get(maxDefI+1).elevation-error);
-				ret.get(maxDefI-1).elevation-=0.1;
+				ret.get(maxDefI-1).elevation-=mid;
 				ret.get(maxDefI-1).elevation = Math.max(ret.get(maxDefI-1).elevation, points.get(maxDefI-1).elevation-error);
 			}
 			ret.get(motorI).elevation = points.get(motorI).elevation;
 		}
-		System.out.println("failed");
-		return ret;
+		return false;
 	}
 	
 	public double slope(Row r1, Row r2) {
 		return (r1.elevation-r2.elevation)/(r1.northing-r2.northing)*100;
 	}
 	
-	public double[] regression(List<Row> points, double h, double k) {
+	public double[] regression(List<Row> points, double h, double k, double maxSlope) {
 		double s1 = 0, s2 = 0, s3 = 0, sumXY = 0, sumY = 0;
 		//double maxSlope = 0.03;
 		for(Row point : points) {
