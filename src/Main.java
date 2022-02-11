@@ -4,13 +4,16 @@ import java.io.*;
 public class Main {
 	
 	String filename;
-	double error, maxSlope, maxD;
+	double error, maxSlope, maxD, maxDW;
+	List<Integer> failed;
 	
-	public Main(String fname, double e, double mSlope, double mD) {
+	public Main(String fname, double e, double mSlope, double mD, double mDW) {
 		filename = fname;
 		error = e;
 		maxSlope = mSlope;
 		maxD = mD;
+		maxDW = mDW;
+		failed = new ArrayList<Integer>();
 	}
 	
 	public void run() throws FileNotFoundException, IOException{
@@ -72,7 +75,7 @@ public class Main {
 			motorI++;
 		}
 		List<Row> ret = new ArrayList<Row>();
-		for(int j = 1; j <= 10; j++) {
+		for(int j = 0; j <= 10; j++) {
 			double[] regression = regression(points, points.get(motorI).northing, points.get(motorI).elevation, maxSlope*0.1*j);
 			ret = new ArrayList<Row>();
 			for(int i = 0; i < points.size(); i++) {
@@ -82,13 +85,14 @@ public class Main {
 				ret.add(new Row(points.get(i).point, points.get(i).northing, points.get(i).easting, ele, points.get(i).description));
 			}
 			
-			if(!fixDeflections(ret, points, motorI, 0.011, 0.01)) {
-				if(!fixDeflections(ret, points, motorI, 0.009, 0.011)) {
-					if(!fixDeflections(ret, points, motorI, 0.01, 0.01)) {
-						if(!fixDeflections(ret, points, motorI, 0.01, 0.011)) {
-							if(!fixDeflections(ret, points, motorI, 0.01, 0.009)) {
+			if(!fixDeflections(ret, points, motorI, 0.011, 0.01) || !checkDeflectionOverWings(ret, motorI)) {
+				if(!fixDeflections(ret, points, motorI, 0.009, 0.011) || !checkDeflectionOverWings(ret, motorI)) {
+					if(!fixDeflections(ret, points, motorI, 0.01, 0.01) || !checkDeflectionOverWings(ret, motorI)) {
+						if(!fixDeflections(ret, points, motorI, 0.01, 0.011) || !checkDeflectionOverWings(ret, motorI)) {
+							if(!fixDeflections(ret, points, motorI, 0.01, 0.009) || !checkDeflectionOverWings(ret, motorI)) {
 								if(j == 10) {
 									System.out.println("failed with " + points.get(0).point);
+									failed.add(ret.get(motorI).point);
 								}
 								continue;
 							}
@@ -100,6 +104,21 @@ public class Main {
 		}
 		
 		return ret;
+	}
+	
+	public boolean checkDeflectionOverWings(List<Row> ret, int motorI) {
+		double totalDeflection = 0;
+		for(int i = 1; i < motorI; i++) {
+			totalDeflection += Math.abs(slope(ret.get(i-1), ret.get(i))-slope(ret.get(i), ret.get(i+1)));
+		}
+		if(totalDeflection > maxDW) {
+			return false;
+		}
+		totalDeflection = 0;
+		for(int i = motorI+1; i < ret.size()-1; i++) {
+			totalDeflection += Math.abs(slope(ret.get(i-1), ret.get(i))-slope(ret.get(i), ret.get(i+1)));
+		}
+		return totalDeflection < maxDW;
 	}
 	
 	public boolean fixDeflections(List<Row> ret, List<Row> points, int motorI, double mid, double sides) {
